@@ -79,7 +79,6 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
       const uRes = await db.query('SELECT ftp_estimado, hrmax FROM usuarios WHERE id=$1', [req.usuario.id]);
       const { ftp_estimado: ftp, hrmax } = uRes.rows[0];
 
-      // Extrai dados da sessão
       const duracao_min = session.totalElapsedTime ? Math.round(session.totalElapsedTime / 60) : 0;
       const distancia_km = session.totalDistance ? parseFloat((session.totalDistance / 1000).toFixed(2)) : 0;
       const fc_media = session.avgHeartRate || null;
@@ -90,6 +89,17 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
       const data_treino = session.startTime
         ? new Date(session.startTime).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0];
+
+      // Verificar duplicado — mesmo usuário, mesma data e mesma duração
+      const duplicado = await db.query(
+        'SELECT id FROM atividades WHERE usuario_id=$1 AND data=$2 AND duracao_min=$3',
+        [req.usuario.id, data_treino, duracao_min]
+      );
+
+      if (duplicado.rows.length > 0) {
+        fs.unlinkSync(req.file.path);
+        return res.status(409).json({ erro: 'Este treino já foi importado anteriormente.' });
+      }
 
       const tss = potencia_media
         ? calcularTSS({ duracao_min, potencia_media, ftp })
