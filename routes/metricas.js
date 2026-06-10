@@ -1,54 +1,80 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
 
-// GET /api/metricas/dashboard — dados completos para o painel
 router.get('/dashboard', auth, async (req, res) => {
   const db = req.app.locals.db;
   const uid = req.usuario.id;
 
   try {
-    // Métricas de hoje
     const hoje = new Date().toISOString().split('T')[0];
     const metricaHoje = await db.query(
       'SELECT * FROM metricas_diarias WHERE usuario_id=$1 AND data<=$2 ORDER BY data DESC LIMIT 1',
       [uid, hoje]
     );
 
-    // Últimas 6 semanas de métricas (1 ponto por semana)
     const historico = await db.query(`
       SELECT data, ctl, atl, tsb FROM metricas_diarias
       WHERE usuario_id=$1 AND data >= NOW() - INTERVAL '42 days'
       ORDER BY data ASC
     `, [uid]);
 
-    // Treinos recentes
     const treinos = await db.query(
       'SELECT * FROM atividades WHERE usuario_id=$1 ORDER BY data DESC LIMIT 10',
       [uid]
     );
 
-    // Último peso registrado
     const peso = await db.query(
       'SELECT * FROM pesos_semanais WHERE usuario_id=$1 ORDER BY data_registro DESC LIMIT 1',
       [uid]
     );
 
-    // Perfil do usuário
     const usuario = await db.query(
       'SELECT nome, objetivo, ftp_estimado, hrmax, peso_inicial FROM usuarios WHERE id=$1',
       [uid]
     );
+
+    // Totais acumulados
+    const totais = await db.query(`
+      SELECT
+        COUNT(*) as total_treinos,
+        COALESCE(SUM(distancia_km), 0) as total_km,
+        COALESCE(SUM(duracao_min), 0) as total_minutos,
+        COALESCE(SUM(tempo_movimento_seg), 0) as total_movimento_seg,
+        COALESCE(SUM(elevacao_m), 0) as total_elevacao,
+        COALESCE(SUM(tss_calculado), 0) as total_tss
+      FROM atividades WHERE usuario_id=$1
+    `, [uid]);
+
+    // Médias ponderadas corretas
+    const mediasQuery = await db.query(`
+      SELECT
+        COALESCE(SUM(distancia_km), 0) as total_km,
+        COALESCE(SUM(tempo_movimento_seg), 0) as total_mov_seg,
+        COALESCE(SUM(cadencia_media * tempo_movimento_seg), 0) as cadencia_ponderada,
+        COALESCE(SUM(fc_media * duracao_min), 0) as fc_ponderada,
+        COALESCE(SUM(duracao_min), 0) as total_min
+      FROM atividades WHERE usuario_id=$1
+    `, [uid]);
+
+    const md = mediasQuery.rows[0];
+    const velocidade_media_mov = md.total_mov_seg > 0
+      ? parseFloat((md.total_km / (md.total_mov_seg / 3600)).toFixed(1))
+      : null;
+    const cadencia_media_pond = md.total_mov_seg > 0
+      ? Math.round(md.cadencia_ponderada / md.total_mov_seg)
+      : null;
+    const fc_media_pond = md.total_min > 0
+      ? Math.round(md.fc_ponderada / md.total_min)
+      : null;
 
     const u = usuario.rows[0];
     const m = metricaHoje.rows[0] || { ctl: 0, atl: 0, tsb: 0 };
     const pesoAtual = peso.rows[0]?.peso_kg || u.peso_inicial || 70;
     const wkg = u.ftp_estimado ? (u.ftp_estimado / pesoAtual).toFixed(2) : 0;
 
-    // Gera insights automáticos
     const insights = gerarInsights(m, u, wkg);
-
-    // Zonas de treino
     const zonas = calcularZonas(u.ftp_estimado, u.hrmax);
+    const t = totais.rows[0];
 
     res.json({
       usuario: u,
@@ -57,7 +83,19 @@ router.get('/dashboard', auth, async (req, res) => {
       treinos_recentes: treinos.rows,
       peso_atual: pesoAtual,
       insights,
-      zonas
+      zonas,
+      totais: {
+        treinos: parseInt(t.total_treinos),
+        km: parseFloat(t.total_km).toFixed(1),
+        horas: (parseInt(t.total_minutos) / 60).toFixed(1),
+        elevacao: parseInt(t.total_elevacao),
+        tss: parseInt(t.total_tss),
+      },
+      medias: {
+        velocidade_mov: velocidade_media_mov,
+        cadencia: cadencia_media_pond,
+        fc: fc_media_pond,
+      }
     });
   } catch (err) {
     res.status(500).json({ erro: err.message });

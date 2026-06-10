@@ -89,9 +89,13 @@ async function criarTabelas() {
       elevacao_m INTEGER,
       tss_calculado INTEGER,
       fonte VARCHAR(30) DEFAULT 'manual',
+      tempo_movimento_seg INTEGER,
+      velocidade_media_mov DECIMAL(6,2),
+      cadencia_max INTEGER,
+      temperatura_media INTEGER,
+      descida_m INTEGER,
       criado_em TIMESTAMP DEFAULT NOW()
     );
-
     CREATE TABLE IF NOT EXISTS metricas_diarias (
       id SERIAL PRIMARY KEY,
       usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,

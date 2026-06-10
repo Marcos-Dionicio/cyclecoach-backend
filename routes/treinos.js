@@ -74,23 +74,47 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
 
       const { messages } = decoder.read();
       const session = messages.sessionMesgs?.[0] || {};
-      const records = messages.recordMesgs || [];
 
       const uRes = await db.query('SELECT ftp_estimado, hrmax FROM usuarios WHERE id=$1', [req.usuario.id]);
       const { ftp_estimado: ftp, hrmax } = uRes.rows[0];
 
-      const duracao_min = session.totalElapsedTime ? Math.round(session.totalElapsedTime / 60) : 0;
+      // Tempo total e em movimento
+      const tempo_total_seg = session.totalElapsedTime || 0;
+      const tempo_movimento_seg = session.totalTimerTime || session.totalMovingTime || tempo_total_seg;
+      const duracao_min = Math.round(tempo_total_seg / 60);
+
+      // Distância
       const distancia_km = session.totalDistance ? parseFloat((session.totalDistance / 1000).toFixed(2)) : 0;
+
+      // Velocidade média em movimento (m/s para km/h)
+      const velocidade_media_mov = tempo_movimento_seg > 0
+        ? parseFloat(((distancia_km / (tempo_movimento_seg / 3600))).toFixed(2))
+        : null;
+
+      // FC
       const fc_media = session.avgHeartRate || null;
       const fc_max = session.maxHeartRate || null;
+
+      // Potência
       const potencia_media = session.avgPower || null;
+
+      // Cadência
       const cadencia_media = session.avgCadence || null;
+      const cadencia_max = session.maxCadence || null;
+
+      // Elevação
       const elevacao_m = session.totalAscent || null;
+      const descida_m = session.totalDescent || null;
+
+      // Temperatura
+      const temperatura_media = session.avgTemperature || null;
+
+      // Data
       const data_treino = session.startTime
         ? new Date(session.startTime).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0];
 
-      // Verificar duplicado — mesmo usuário, mesma data e mesma duração
+      // Verificar duplicado
       const duplicado = await db.query(
         'SELECT id FROM atividades WHERE usuario_id=$1 AND data=$2 AND duracao_min=$3',
         [req.usuario.id, data_treino, duracao_min]
@@ -106,18 +130,26 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
         : calcularTSSporFC({ duracao_min, fc_media, hrmax });
 
       const result = await db.query(`
-        INSERT INTO atividades (usuario_id, nome, tipo, data, duracao_min, distancia_km, fc_media, fc_max, potencia_media, cadencia_media, elevacao_m, tss_calculado, fonte)
-        VALUES ($1,$2,'Ciclismo',$3,$4,$5,$6,$7,$8,$9,$10,$11,'fit')
+        INSERT INTO atividades (
+          usuario_id, nome, tipo, data, duracao_min, distancia_km,
+          fc_media, fc_max, potencia_media, cadencia_media, elevacao_m,
+          tss_calculado, fonte, tempo_movimento_seg, velocidade_media_mov,
+          cadencia_max, temperatura_media, descida_m
+        )
+        VALUES ($1,$2,'Ciclismo',$3,$4,$5,$6,$7,$8,$9,$10,$11,'fit',$12,$13,$14,$15,$16)
         RETURNING *
-      `, [req.usuario.id, req.file.originalname, data_treino, duracao_min, distancia_km, fc_media, fc_max, potencia_media, cadencia_media, elevacao_m, tss]);
+      `, [
+        req.usuario.id, req.file.originalname, data_treino, duracao_min, distancia_km,
+        fc_media, fc_max, potencia_media, cadencia_media, elevacao_m,
+        tss, tempo_movimento_seg, velocidade_media_mov, cadencia_max, temperatura_media, descida_m
+      ]);
 
       await recalcularMetricas(db, req.usuario.id);
       fs.unlinkSync(req.file.path);
 
       res.status(201).json({
         treino: result.rows[0],
-        tss_calculado: tss,
-        registros: records.length
+        tss_calculado: tss
       });
 
     } else {
