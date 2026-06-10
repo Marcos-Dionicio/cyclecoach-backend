@@ -107,7 +107,7 @@ async function criarTabelas() {
       UNIQUE(usuario_id, data)
     );
   `);
-  console.log('Tabelas verificadas/criadas!');
+  // Migração — adiciona colunas novas se não existirem     await pool.query(`       ALTER TABLE atividades         ADD COLUMN IF NOT EXISTS tempo_movimento_seg INTEGER,         ADD COLUMN IF NOT EXISTS velocidade_media_mov DECIMAL(6,2),         ADD COLUMN IF NOT EXISTS cadencia_max INTEGER,         ADD COLUMN IF NOT EXISTS temperatura_media INTEGER,         ADD COLUMN IF NOT EXISTS descida_m INTEGER;     `);     console.log('Tabelas verificadas/criadas!');
 }
 
 iniciar();
