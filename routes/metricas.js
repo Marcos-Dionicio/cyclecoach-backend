@@ -51,8 +51,9 @@ router.get('/dashboard', auth, async (req, res) => {
         COALESCE(SUM(distancia_km), 0) as total_km,
         COALESCE(SUM(tempo_movimento_seg), 0) as total_mov_seg,
         COALESCE(SUM(cadencia_media * tempo_movimento_seg), 0) as cadencia_ponderada,
+        COALESCE(SUM(tempo_movimento_seg) FILTER (WHERE cadencia_media IS NOT NULL), 0) as total_mov_seg_cadencia,
         COALESCE(SUM(fc_media * duracao_min), 0) as fc_ponderada,
-        COALESCE(SUM(duracao_min), 0) as total_min
+        COALESCE(SUM(duracao_min) FILTER (WHERE fc_media IS NOT NULL), 0) as total_min_fc
       FROM atividades WHERE usuario_id=$1
     `, [uid]);
 
@@ -60,11 +61,11 @@ router.get('/dashboard', auth, async (req, res) => {
     const velocidade_media_mov = md.total_mov_seg > 0
       ? parseFloat((md.total_km / (md.total_mov_seg / 3600)).toFixed(1))
       : null;
-    const cadencia_media_pond = md.total_mov_seg > 0
-      ? Math.round(md.cadencia_ponderada / md.total_mov_seg)
+    const cadencia_media_pond = md.total_mov_seg_cadencia > 0
+      ? Math.round(md.cadencia_ponderada / md.total_mov_seg_cadencia)
       : null;
-    const fc_media_pond = md.total_min > 0
-      ? Math.round(md.fc_ponderada / md.total_min)
+    const fc_media_pond = md.total_min_fc > 0
+      ? Math.round(md.fc_ponderada / md.total_min_fc)
       : null;
 
     const u = usuario.rows[0];
