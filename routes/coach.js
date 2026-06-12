@@ -6,7 +6,7 @@ router.post('/perguntar', auth, async (req, res) => {
   const db = req.app.locals.db;
   const { pergunta } = req.body;
 
-  if (!pergunta) return res.status(400).json({ erro: 'Pergunta nao informada' });
+  if (!pergunta) return res.status(400).json({ erro: 'Pergunta não informada' });
 
   try {
     // Busca contexto do usuário
@@ -72,7 +72,7 @@ Responda de forma clara, objetiva e personalizada para este atleta. Use os dados
     });
 
     const data = await response.json();
-    const resposta = data.content?.[0]?.text || 'Nao foi possivel gerar resposta. Tente novamente.';
+    const resposta = data.content?.[0]?.text || 'Não foi possível gerar resposta. Tente novamente.';
 
     res.json({ resposta });
   } catch (err) {

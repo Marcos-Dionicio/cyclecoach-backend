@@ -154,7 +154,7 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
 
     } else {
       fs.unlinkSync(req.file.path);
-      res.status(400).json({ erro: 'Formato nao suportado. Use .fit' });
+      res.status(400).json({ erro: 'Formato não suportado. Use .fit' });
     }
   } catch (err) {
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);

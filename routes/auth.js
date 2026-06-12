@@ -8,7 +8,7 @@ router.post('/cadastro', async (req, res) => {
   const { nome, email, senha, idade, sexo, peso, altura, objetivo, nivel, dias_semana } = req.body;
 
   if (!nome || !email || !senha) {
-    return res.status(400).json({ erro: 'Nome, email e senha sao obrigatorios' });
+    return res.status(400).json({ erro: 'Nome, email e senha são obrigatórios' });
   }
 
   try {

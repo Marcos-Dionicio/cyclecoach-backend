@@ -9,7 +9,7 @@ router.get('/perfil', auth, async (req, res) => {
       'SELECT id, nome, email, idade, sexo, peso_inicial, altura, objetivo, nivel, dias_semana, ftp_estimado, hrmax, criado_em FROM usuarios WHERE id = $1',
       [req.usuario.id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ erro: 'Usuario nao encontrado' });
+    if (result.rows.length === 0) return res.status(404).json({ erro: 'Usuário não encontrado' });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ erro: err.message });

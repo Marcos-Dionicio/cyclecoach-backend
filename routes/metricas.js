@@ -111,19 +111,19 @@ function gerarInsights(m, u, wkg) {
   if (tsb < -20) {
     insights.push({ tipo: 'alerta', titulo: 'Fadiga elevada', texto: `TSB em ${tsb.toFixed(0)}. Priorize 1-2 dias de recovery antes de treinar intenso.` });
   } else if (tsb < -10) {
-    insights.push({ tipo: 'atencao', titulo: 'Carga acumulada', texto: `TSB em ${tsb.toFixed(0)}. Voce esta em zona de construcao. Monitore o cansaco.` });
+    insights.push({ tipo: 'atencao', titulo: 'Carga acumulada', texto: `TSB em ${tsb.toFixed(0)}. Você está em zona de construção. Monitore o cansaço.` });
   } else if (tsb >= -5 && tsb <= 10) {
-    insights.push({ tipo: 'ok', titulo: 'Bom balanco', texto: 'Voce esta na zona ideal para treinar com qualidade hoje.' });
+    insights.push({ tipo: 'ok', titulo: 'Bom balanço', texto: 'Você está na zona ideal para treinar com qualidade hoje.' });
   }
 
   if (ctl > 0) {
-    insights.push({ tipo: 'info', titulo: 'Forma atual', texto: `CTL ${ctl.toFixed(0)} — ${ctl < 30 ? 'em construcao de base' : ctl < 60 ? 'nivel intermediario' : 'boa forma atletica'}.` });
+    insights.push({ tipo: 'info', titulo: 'Forma atual', texto: `CTL ${ctl.toFixed(0)} — ${ctl < 30 ? 'em construção de base' : ctl < 60 ? 'nível intermediário' : 'boa forma atlética'}.` });
   }
 
   if (u.objetivo === 'melhorar_ftp') {
-    insights.push({ tipo: 'dica', titulo: 'Para subir FTP', texto: 'Faca 2 sessoes de Z4 por semana (blocos 2x20min). Mantenha Z2 nos outros dias.' });
+    insights.push({ tipo: 'dica', titulo: 'Para subir FTP', texto: 'Faça 2 sessões de Z4 por semana (blocos 2x20min). Mantenha Z2 nos outros dias.' });
   } else if (u.objetivo === 'perder_peso') {
-    insights.push({ tipo: 'dica', titulo: 'Para perder peso', texto: 'Rides longos em Z2 maximizam queima de gordura. Alvo: 90min+ por sessao.' });
+    insights.push({ tipo: 'dica', titulo: 'Para perder peso', texto: 'Rides longos em Z2 maximizam queima de gordura. Alvo: 90min+ por sessão.' });
   }
 
   return insights;
