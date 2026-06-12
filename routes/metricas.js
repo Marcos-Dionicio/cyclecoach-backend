@@ -29,7 +29,7 @@ router.get('/dashboard', auth, async (req, res) => {
     );
 
     const usuario = await db.query(
-      'SELECT nome, objetivo, ftp_estimado, hrmax, peso_inicial FROM usuarios WHERE id=$1',
+      'SELECT nome, objetivo, ftp_estimado, hrmax, idade, peso_inicial FROM usuarios WHERE id=$1',
       [uid]
     );
 
@@ -73,8 +73,9 @@ router.get('/dashboard', auth, async (req, res) => {
     const pesoAtual = peso.rows[0]?.peso_kg || u.peso_inicial || 70;
     const wkg = u.ftp_estimado ? (u.ftp_estimado / pesoAtual).toFixed(2) : 0;
 
+    const hrmax = u.idade ? 220 - u.idade : u.hrmax;
     const insights = gerarInsights(m, u, wkg);
-    const zonas = calcularZonas(u.ftp_estimado, u.hrmax);
+    const zonas = calcularZonas(u.ftp_estimado, hrmax);
     const t = totais.rows[0];
 
     res.json({
