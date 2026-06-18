@@ -6,8 +6,8 @@ function calcularFTP(peso, nivel) {
   return Math.round(base * peso);
 }
 
-function calcularHRmax(idade, sexo) {
-  return sexo === 'Feminino' ? Math.round(206 - 0.88 * idade) : Math.round(208 - 0.7 * idade);
+function calcularHRmax(idade) {
+  return 220 - (parseInt(idade) || 30);
 }
 
 function calcularNivelPorCTL(ctl) {
@@ -68,7 +68,7 @@ router.put('/perfil', auth, async (req, res) => {
     const nivelAuto = calcularNivelPorCTL(ctl) || current.rows[0]?.nivel || 'iniciante';
 
     const ftp_estimado = calcularFTP(pesoNovo || parseFloat(pesoAtual) || 70, nivelAuto);
-    const hrmax = calcularHRmax(parseInt(idade) || 30, sexo || 'Masculino');
+    const hrmax = calcularHRmax(idade);
 
     const result = await db.query(`
       UPDATE usuarios

@@ -3,7 +3,7 @@ const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { calcularTSS, calcularTSSporFC, recalcularMetricas } = require('../services/metricas');
+const { calcularTSS, calcularTSSporFC, recalcularMetricas, calcularMelhorPower20min } = require('../services/metricas');
 const { gerarAnaliseIA } = require('../services/analiseIA');
 
 const storage = multer.diskStorage({
@@ -148,6 +148,14 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
       await recalcularMetricas(db, req.usuario.id);
       fs.unlinkSync(req.file.path);
 
+      // Atualiza FTP se o melhor esforço de 20 min superar o valor atual
+      let ftp_atualizado = null;
+      const ftpCalculado = calcularMelhorPower20min(messages.recordMesgs);
+      if (ftpCalculado && ftpCalculado > ftp) {
+        await db.query('UPDATE usuarios SET ftp_estimado=$1 WHERE id=$2', [ftpCalculado, req.usuario.id]);
+        ftp_atualizado = ftpCalculado;
+      }
+
       const atividade = result.rows[0];
       const analise_ia = await gerarAnaliseIA(db, req.usuario.id, atividade);
       await db.query('UPDATE atividades SET analise_ia=$1 WHERE id=$2', [analise_ia, atividade.id]);
@@ -155,7 +163,8 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
 
       res.status(201).json({
         treino: atividade,
-        tss_calculado: tss
+        tss_calculado: tss,
+        ftp_atualizado,
       });
 
     } else {

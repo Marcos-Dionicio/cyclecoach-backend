@@ -77,4 +77,42 @@ async function recalcularMetricas(db, usuario_id) {
   }
 }
 
-module.exports = { calcularTSS, calcularTSSporFC, recalcularMetricas };
+// Calcula o melhor esforço médio de 20 min a partir dos records do .FIT
+// Retorna FTP estimado (melhor_media_20min × 0.95) ou null se dados insuficientes
+function calcularMelhorPower20min(recordMesgs) {
+  const registros = (recordMesgs || [])
+    .filter(r => r.power != null && r.timestamp != null)
+    .map(r => ({ t: new Date(r.timestamp).getTime(), p: r.power }))
+    .sort((a, b) => a.t - b.t);
+
+  const n = registros.length;
+  if (n < 10) return null;
+
+  const duracaoTotal = (registros[n - 1].t - registros[0].t) / 1000;
+  if (duracaoTotal < 1200) return null; // menos de 20 min de dados de potência
+
+  const JANELA_MS = 1200 * 1000;     // 20 min exatos
+  const MIN_JANELA_MS = 1140 * 1000; // 19 min mínimo (tolerância para intervalos variáveis)
+
+  let melhorMedia = 0;
+  let soma = 0;
+  let i = 0;
+
+  for (let j = 0; j < n; j++) {
+    soma += registros[j].p;
+
+    while (i < j && (registros[j].t - registros[i].t) > JANELA_MS) {
+      soma -= registros[i].p;
+      i++;
+    }
+
+    if ((registros[j].t - registros[i].t) >= MIN_JANELA_MS) {
+      const media = soma / (j - i + 1);
+      if (media > melhorMedia) melhorMedia = media;
+    }
+  }
+
+  return melhorMedia > 0 ? Math.round(melhorMedia * 0.95) : null;
+}
+
+module.exports = { calcularTSS, calcularTSSporFC, recalcularMetricas, calcularMelhorPower20min };
