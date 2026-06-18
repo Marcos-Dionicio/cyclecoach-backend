@@ -28,7 +28,10 @@ async function recalcularMetricas(db, usuario_id) {
     [usuario_id]
   );
 
-  if (atRes.rows.length === 0) return;
+  if (atRes.rows.length === 0) {
+    await db.query('DELETE FROM metricas_diarias WHERE usuario_id=$1', [usuario_id]);
+    return;
+  }
 
   // Agrupa TSS por dia
   const tssPorDia = {};
@@ -40,6 +43,12 @@ async function recalcularMetricas(db, usuario_id) {
   // Determina range de datas
   const datas = Object.keys(tssPorDia).sort();
   const inicio = new Date(datas[0]);
+
+  // Remove linhas órfãs antes do primeiro treino (podem existir se o treino mais antigo foi deletado)
+  await db.query(
+    'DELETE FROM metricas_diarias WHERE usuario_id=$1 AND data < $2',
+    [usuario_id, datas[0]]
+  );
   const hoje = new Date();
 
   let ctl = 0;
