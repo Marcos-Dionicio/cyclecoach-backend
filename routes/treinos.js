@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { calcularTSS, calcularTSSporFC, recalcularMetricas } = require('../services/metricas');
+const { gerarAnaliseIA } = require('../services/analiseIA');
 
 const storage = multer.diskStorage({
   destination: 'uploads/',
@@ -147,8 +148,13 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
       await recalcularMetricas(db, req.usuario.id);
       fs.unlinkSync(req.file.path);
 
+      const atividade = result.rows[0];
+      const analise_ia = await gerarAnaliseIA(db, req.usuario.id, atividade);
+      await db.query('UPDATE atividades SET analise_ia=$1 WHERE id=$2', [analise_ia, atividade.id]);
+      atividade.analise_ia = analise_ia;
+
       res.status(201).json({
-        treino: result.rows[0],
+        treino: atividade,
         tss_calculado: tss
       });
 
@@ -158,6 +164,50 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
     }
   } catch (err) {
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// GET /api/treinos/:id/relatorio
+router.get('/:id/relatorio', auth, async (req, res) => {
+  const db = req.app.locals.db;
+  try {
+    const tRes = await db.query(
+      'SELECT * FROM atividades WHERE id=$1 AND usuario_id=$2',
+      [req.params.id, req.usuario.id]
+    );
+    if (tRes.rows.length === 0) return res.status(404).json({ erro: 'Treino não encontrado' });
+
+    let treino = tRes.rows[0];
+
+    if (!treino.analise_ia) {
+      const analise_ia = await gerarAnaliseIA(db, req.usuario.id, treino);
+      await db.query('UPDATE atividades SET analise_ia=$1 WHERE id=$2', [analise_ia, treino.id]);
+      treino.analise_ia = analise_ia;
+    }
+
+    const mRes = await db.query(`
+      SELECT
+        AVG(fc_media) as fc_media,
+        AVG(cadencia_media) as cadencia_media,
+        AVG(velocidade_media_mov) as velocidade_media_mov,
+        AVG(distancia_km) as distancia_km,
+        AVG(tss_calculado) as tss_calculado
+      FROM atividades
+      WHERE usuario_id=$1 AND id != $2
+    `, [req.usuario.id, treino.id]);
+
+    const hRes = await db.query(
+      'SELECT data, fc_media, velocidade_media_mov, cadencia_media, distancia_km, tss_calculado FROM atividades WHERE usuario_id=$1 ORDER BY data DESC LIMIT 10',
+      [req.usuario.id]
+    );
+
+    res.json({
+      treino,
+      medias_anteriores: mRes.rows[0],
+      historico: hRes.rows.reverse(),
+    });
+  } catch (err) {
     res.status(500).json({ erro: err.message });
   }
 });
