@@ -29,7 +29,7 @@ router.post('/cadastro', async (req, res) => {
 
     // Calcula FTP estimado e HRmax com base no perfil
     const ftp_estimado = calcularFTP(peso || 70, nivel || 'iniciante');
-    const hrmax = calcularHRmax(idade);
+    const hrmax = calcularHRmax(idade, sexo);
 
     const result = await db.query(`
       INSERT INTO usuarios (nome, email, senha_hash, idade, sexo, peso_inicial, altura, objetivo, nivel, dias_semana, ftp_estimado, hrmax)
@@ -175,8 +175,9 @@ function calcularFTP(peso, nivel) {
   return Math.round(base * peso);
 }
 
-function calcularHRmax(idade) {
-  return 220 - (parseInt(idade) || 30);
+function calcularHRmax(idade, sexo) {
+  const base = sexo === 'Feminino' ? 226 : 220;
+  return base - (parseInt(idade) || 30);
 }
 
 module.exports = router;
