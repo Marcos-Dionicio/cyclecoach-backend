@@ -4,7 +4,7 @@ const auth = require('../middleware/auth');
 // POST /api/coach/perguntar
 router.post('/perguntar', auth, async (req, res) => {
   const db = req.app.locals.db;
-  const { pergunta } = req.body;
+  const { pergunta, historico, idioma } = req.body;
 
   if (!pergunta) return res.status(400).json({ erro: 'Pergunta não informada' });
 
@@ -36,7 +36,12 @@ router.post('/perguntar', auth, async (req, res) => {
       [req.usuario.id]
     );
 
-    const contexto = `
+    const instrucaoIdioma = idioma === 'en'
+      ? 'IMPORTANT: Always respond in English.'
+      : 'IMPORTANTE: Responda sempre em Português do Brasil.';
+
+    const contexto = `${instrucaoIdioma}
+
 Voce e o CycleCoach, um coach de ciclismo especializado e personalizado.
 
 PERFIL DO ATLETA:
@@ -62,16 +67,28 @@ Responda de forma clara, objetiva e personalizada para este atleta. Use os dados
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-haiku-4-5',
         max_tokens: 300,
         system: contexto,
-        messages: [{ role: 'user', content: pergunta }]
+        messages: (historico && historico.length > 0)
+          ? historico
+          : [{ role: 'user', content: pergunta }]
       })
     });
 
     const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[coach] Anthropic API error:', response.status, JSON.stringify(data));
+      return res.status(502).json({ erro: `Anthropic API error ${response.status}: ${data?.error?.message || 'unknown'}` });
+    }
+
     const resposta = data.content?.[0]?.text || 'Não foi possível gerar resposta. Tente novamente.';
 
     res.json({ resposta });
