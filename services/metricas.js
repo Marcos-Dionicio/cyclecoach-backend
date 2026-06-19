@@ -77,6 +77,54 @@ async function recalcularMetricas(db, usuario_id) {
   }
 }
 
+// Calcula a melhor FC média de 20 min a partir dos records do .FIT
+// Retorna a FC média arredondada ou null se dados insuficientes
+function calcularMelhorFC20min(recordMesgs) {
+  const registros = (recordMesgs || [])
+    .filter(r => r.heartRate != null && r.timestamp != null)
+    .map(r => ({ t: new Date(r.timestamp).getTime(), hr: r.heartRate }))
+    .sort((a, b) => a.t - b.t);
+
+  const n = registros.length;
+  if (n < 10) return null;
+
+  const duracaoTotal = (registros[n - 1].t - registros[0].t) / 1000;
+  if (duracaoTotal < 1200) return null;
+
+  const JANELA_MS = 1200 * 1000;
+  const MIN_JANELA_MS = 1140 * 1000;
+
+  let melhorMedia = 0;
+  let soma = 0;
+  let i = 0;
+
+  for (let j = 0; j < n; j++) {
+    soma += registros[j].hr;
+    while (i < j && (registros[j].t - registros[i].t) > JANELA_MS) {
+      soma -= registros[i].hr;
+      i++;
+    }
+    if ((registros[j].t - registros[i].t) >= MIN_JANELA_MS) {
+      const media = soma / (j - i + 1);
+      if (media > melhorMedia) melhorMedia = media;
+    }
+  }
+
+  return melhorMedia > 0 ? Math.round(melhorMedia) : null;
+}
+
+// Estima FTP (watts) a partir da melhor FC média de 20 min e peso do atleta
+// Só retorna valor se o esforço atingiu limiar mínimo (≥ 85% HRmax)
+// Âncoras calibradas com o sistema existente: 85% → 2.0 W/kg, 95% → 3.5 W/kg
+// Fator 0.95 aplica conservadorismo em relação à estimativa por potência
+function estimarFTPporFC(melhorHR20min, hrmax, peso) {
+  if (!melhorHR20min || !hrmax || !peso) return null;
+  const hrRatio = melhorHR20min / hrmax;
+  if (hrRatio < 0.85) return null;
+  const wkg = Math.min(2.0 + (hrRatio - 0.85) * 15, 4.5);
+  return Math.round(wkg * peso * 0.95);
+}
+
 // Calcula o melhor esforço médio de 20 min a partir dos records do .FIT
 // Retorna FTP estimado (melhor_media_20min × 0.95) ou null se dados insuficientes
 function calcularMelhorPower20min(recordMesgs) {
@@ -115,4 +163,4 @@ function calcularMelhorPower20min(recordMesgs) {
   return melhorMedia > 0 ? Math.round(melhorMedia * 0.95) : null;
 }
 
-module.exports = { calcularTSS, calcularTSSporFC, recalcularMetricas, calcularMelhorPower20min };
+module.exports = { calcularTSS, calcularTSSporFC, recalcularMetricas, calcularMelhorPower20min, calcularMelhorFC20min, estimarFTPporFC };

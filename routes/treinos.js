@@ -3,7 +3,7 @@ const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { calcularTSS, calcularTSSporFC, recalcularMetricas, calcularMelhorPower20min } = require('../services/metricas');
+const { calcularTSS, calcularTSSporFC, recalcularMetricas, calcularMelhorPower20min, calcularMelhorFC20min, estimarFTPporFC } = require('../services/metricas');
 const { gerarAnaliseIA } = require('../services/analiseIA');
 
 const storage = multer.diskStorage({
@@ -76,8 +76,8 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
       const { messages } = decoder.read();
       const session = messages.sessionMesgs?.[0] || {};
 
-      const uRes = await db.query('SELECT ftp_estimado, hrmax FROM usuarios WHERE id=$1', [req.usuario.id]);
-      const { ftp_estimado: ftp, hrmax } = uRes.rows[0];
+      const uRes = await db.query('SELECT ftp_estimado, hrmax, peso_inicial FROM usuarios WHERE id=$1', [req.usuario.id]);
+      const { ftp_estimado: ftp, hrmax, peso_inicial } = uRes.rows[0];
 
       // Tempo total e em movimento
       const tempo_total_seg = session.totalElapsedTime || 0;
@@ -154,6 +154,16 @@ router.post('/upload', auth, upload.single('arquivo'), async (req, res) => {
       if (ftpCalculado && ftpCalculado > ftp) {
         await db.query('UPDATE usuarios SET ftp_estimado=$1 WHERE id=$2', [ftpCalculado, req.usuario.id]);
         ftp_atualizado = ftpCalculado;
+      }
+
+      // Sem potência: estima FTP via melhor FC média de 20 min
+      if (!ftp_atualizado && !potencia_media) {
+        const melhorFC = calcularMelhorFC20min(messages.recordMesgs);
+        const ftpPorFC = estimarFTPporFC(melhorFC, hrmax, peso_inicial);
+        if (ftpPorFC && ftpPorFC > ftp) {
+          await db.query('UPDATE usuarios SET ftp_estimado=$1 WHERE id=$2', [ftpPorFC, req.usuario.id]);
+          ftp_atualizado = ftpPorFC;
+        }
       }
 
       const atividade = result.rows[0];
