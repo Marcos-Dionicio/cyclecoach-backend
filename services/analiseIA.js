@@ -18,13 +18,23 @@ async function gerarAnaliseIA(db, usuario_id, atividade) {
     `, [usuario_id, atividade.id]);
     const media = mRes.rows[0];
 
+    const potenciaRes = await db.query(
+      'SELECT COUNT(*) FROM atividades WHERE usuario_id=$1 AND potencia_media IS NOT NULL',
+      [usuario_id]
+    );
+    const tem_potencia_real = parseInt(potenciaRes.rows[0].count) > 0;
+
+    const linhaPotencia = tem_potencia_real
+      ? `- FTP estimado: ${u.ftp_estimado}W`
+      : `- Nota: sem dados de potência real. Não mencione FTP ou W/kg. Analise com base em FC, velocidade e cadência.`;
+
     const contexto = `
 Você é o CycleCoach, um coach de ciclismo especializado e personalizado.
 
 PERFIL DO ATLETA:
 - Nome: ${u.nome}
 - Objetivo: ${u.objetivo}
-- FTP estimado: ${u.ftp_estimado}W
+${linhaPotencia}
 - FC máxima: ${u.hrmax} bpm
 
 TREINO REALIZADO:

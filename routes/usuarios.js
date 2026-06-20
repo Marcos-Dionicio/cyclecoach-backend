@@ -31,19 +31,20 @@ router.get('/perfil', auth, async (req, res) => {
 
     const usuario = result.rows[0];
 
-    const metricaRes = await db.query(
-      'SELECT ctl FROM metricas_diarias WHERE usuario_id=$1 AND data <= CURRENT_DATE ORDER BY data DESC LIMIT 1',
-      [req.usuario.id]
-    );
+    const [metricaRes, potenciaRes] = await Promise.all([
+      db.query('SELECT ctl FROM metricas_diarias WHERE usuario_id=$1 AND data <= CURRENT_DATE ORDER BY data DESC LIMIT 1', [req.usuario.id]),
+      db.query('SELECT COUNT(*) FROM atividades WHERE usuario_id=$1 AND potencia_media IS NOT NULL', [req.usuario.id]),
+    ]);
     const ctl = metricaRes.rows[0]?.ctl ?? null;
     const nivel_calculado = calcularNivelPorCTL(ctl);
+    const tem_potencia_real = parseInt(potenciaRes.rows[0].count) > 0;
 
     if (nivel_calculado && nivel_calculado !== usuario.nivel) {
       await db.query('UPDATE usuarios SET nivel=$1 WHERE id=$2', [nivel_calculado, req.usuario.id]);
       usuario.nivel = nivel_calculado;
     }
 
-    res.json({ ...usuario, nivel_calculado, ctl_atual: ctl ? parseFloat(ctl).toFixed(1) : null });
+    res.json({ ...usuario, nivel_calculado, ctl_atual: ctl ? parseFloat(ctl).toFixed(1) : null, tem_potencia_real });
   } catch (err) {
     res.status(500).json({ erro: err.message });
   }

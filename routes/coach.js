@@ -36,9 +36,19 @@ router.post('/perguntar', auth, async (req, res) => {
       [req.usuario.id]
     );
 
+    const potenciaRes = await db.query(
+      'SELECT COUNT(*) FROM atividades WHERE usuario_id=$1 AND potencia_media IS NOT NULL',
+      [req.usuario.id]
+    );
+    const tem_potencia_real = parseInt(potenciaRes.rows[0].count) > 0;
+
     const instrucaoIdioma = idioma === 'en'
       ? 'IMPORTANT: Always respond in English.'
       : 'IMPORTANTE: Responda sempre em Português do Brasil.';
+
+    const linhasPotencia = tem_potencia_real
+      ? `- FTP: ${u.ftp_estimado}W\n- W/kg: ${p.wkg_calculado || (u.ftp_estimado / u.peso_inicial).toFixed(1)}`
+      : `- Nota: atleta treina sem potenciômetro. Não mencione FTP, watts ou W/kg nas respostas. Use zonas de FC.`;
 
     const contexto = `${instrucaoIdioma}
 
@@ -49,10 +59,9 @@ PERFIL DO ATLETA:
 - Idade: ${u.idade} anos
 - Objetivo: ${u.objetivo}
 - Nivel: intermediario
-- FTP estimado: ${u.ftp_estimado}W
 - FC maxima: ${u.hrmax} bpm
 - Peso atual: ${p.peso_kg}kg
-- W/kg: ${p.wkg_calculado || (u.ftp_estimado/u.peso_inicial).toFixed(1)}
+${linhasPotencia}
 
 METRICAS ATUAIS:
 - CTL (Forma): ${parseFloat(m.ctl).toFixed(1)}

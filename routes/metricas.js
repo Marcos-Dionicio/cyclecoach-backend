@@ -68,19 +68,26 @@ router.get('/dashboard', auth, async (req, res) => {
       ? Math.round(md.fc_ponderada / md.total_min_fc)
       : null;
 
+    const potenciaRes = await db.query(
+      'SELECT COUNT(*) FROM atividades WHERE usuario_id=$1 AND potencia_media IS NOT NULL',
+      [uid]
+    );
+    const tem_potencia_real = parseInt(potenciaRes.rows[0].count) > 0;
+
     const u = usuario.rows[0];
     const m = metricaHoje.rows[0] || { ctl: 0, atl: 0, tsb: 0 };
     const pesoAtual = peso.rows[0]?.peso_kg || u.peso_inicial || 70;
-    const wkg = u.ftp_estimado ? (u.ftp_estimado / pesoAtual).toFixed(2) : 0;
+    const wkg = tem_potencia_real && u.ftp_estimado ? (u.ftp_estimado / pesoAtual).toFixed(2) : null;
 
     const hrmax = u.idade ? 220 - u.idade : u.hrmax;
-    const insights = gerarInsights(m, u, wkg);
-    const zonas = calcularZonas(u.ftp_estimado, hrmax);
+    const insights = gerarInsights(m, u, wkg, tem_potencia_real);
+    const zonas = calcularZonas(u.ftp_estimado, hrmax, tem_potencia_real);
     const t = totais.rows[0];
 
     res.json({
       usuario: u,
       metricas: { ...m, wkg },
+      tem_potencia_real,
       historico: historico.rows,
       treinos_recentes: treinos.rows,
       peso_atual: pesoAtual,
@@ -104,7 +111,7 @@ router.get('/dashboard', auth, async (req, res) => {
   }
 });
 
-function gerarInsights(m, u, wkg) {
+function gerarInsights(m, u, wkg, tem_potencia_real) {
   const insights = [];
   const tsb = parseFloat(m.tsb || 0);
   const ctl = parseFloat(m.ctl || 0);
@@ -122,7 +129,11 @@ function gerarInsights(m, u, wkg) {
   }
 
   if (u.objetivo === 'melhorar_ftp') {
-    insights.push({ tipo: 'dica', titulo: 'Para subir FTP', texto: 'Faça 2 sessões de Z4 por semana (blocos 2x20min). Mantenha Z2 nos outros dias.' });
+    if (tem_potencia_real) {
+      insights.push({ tipo: 'dica', titulo: 'Para subir FTP', texto: 'Faça 2 sessões de Z4 por semana (blocos 2x20min). Mantenha Z2 nos outros dias.' });
+    } else {
+      insights.push({ tipo: 'dica', titulo: 'Para melhorar o condicionamento', texto: 'Faça 2 sessões em Z4 de FC por semana (blocos de 20min acima de 85% da FC máx). Mantenha Z2 nos outros dias.' });
+    }
   } else if (u.objetivo === 'perder_peso') {
     insights.push({ tipo: 'dica', titulo: 'Para perder peso', texto: 'Rides longos em Z2 maximizam queima de gordura. Alvo: 90min+ por sessão.' });
   }
@@ -130,15 +141,20 @@ function gerarInsights(m, u, wkg) {
   return insights;
 }
 
-function calcularZonas(ftp, hrmax) {
-  if (!ftp) return [];
-  return [
-    { zona: 'Z1 — Recovery',     potMin: Math.round(ftp*0.45), potMax: Math.round(ftp*0.55), fcMin: Math.round(hrmax*0.50), fcMax: Math.round(hrmax*0.60) },
-    { zona: 'Z2 — Base aerobica', potMin: Math.round(ftp*0.56), potMax: Math.round(ftp*0.75), fcMin: Math.round(hrmax*0.60), fcMax: Math.round(hrmax*0.70) },
-    { zona: 'Z3 — Tempo',         potMin: Math.round(ftp*0.76), potMax: Math.round(ftp*0.90), fcMin: Math.round(hrmax*0.70), fcMax: Math.round(hrmax*0.80) },
-    { zona: 'Z4 — Limiar',        potMin: Math.round(ftp*0.91), potMax: Math.round(ftp*1.05), fcMin: Math.round(hrmax*0.80), fcMax: Math.round(hrmax*0.90) },
-    { zona: 'Z5 — VO2 max',       potMin: Math.round(ftp*1.06), potMax: Math.round(ftp*1.20), fcMin: Math.round(hrmax*0.90), fcMax: hrmax },
+function calcularZonas(ftp, hrmax, tem_potencia_real) {
+  if (!hrmax) return [];
+  const zonaFC = [
+    { zona: 'Z1 — Recovery',      fcMin: Math.round(hrmax*0.50), fcMax: Math.round(hrmax*0.60) },
+    { zona: 'Z2 — Base aeróbica', fcMin: Math.round(hrmax*0.60), fcMax: Math.round(hrmax*0.70) },
+    { zona: 'Z3 — Tempo',         fcMin: Math.round(hrmax*0.70), fcMax: Math.round(hrmax*0.80) },
+    { zona: 'Z4 — Limiar',        fcMin: Math.round(hrmax*0.80), fcMax: Math.round(hrmax*0.90) },
+    { zona: 'Z5 — VO2 max',       fcMin: Math.round(hrmax*0.90), fcMax: hrmax },
   ];
+  if (!tem_potencia_real || !ftp) return zonaFC;
+  return zonaFC.map((z, i) => {
+    const mult = [[0.45,0.55],[0.56,0.75],[0.76,0.90],[0.91,1.05],[1.06,1.20]][i];
+    return { ...z, potMin: Math.round(ftp*mult[0]), potMax: Math.round(ftp*mult[1]) };
+  });
 }
 
 module.exports = router;
